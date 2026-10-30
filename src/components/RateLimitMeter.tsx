@@ -14,30 +14,30 @@ export function RateLimitMeter({ status, secondsUntilReset, blocked }: RateLimit
   const dense = limit !== null && limit > 20
 
   return (
-    <section className={`card ${blocked ? 'card--alert' : ''}`}>
-      <header className="card__header">
-        <h2 className="card__title">Solicitudes por minuto</h2>
-        <span className="countdown" aria-live="polite">
-          Reinicio en <strong>{displayFormatter.countdown(secondsUntilReset)}</strong>
+    <section className={`panel-section ${blocked ? 'panel-section--blocked' : ''}`} aria-labelledby="rate-heading">
+      <div className="panel-section__heading">
+        <h2 id="rate-heading">Solicitudes por minuto</h2>
+        <span className="panel-section__aside" aria-live="polite">
+          Reinicio en <strong className="clock">{displayFormatter.countdown(secondsUntilReset)}</strong>
         </span>
-      </header>
-
-      <div className="rate-figures">
-        <span className="rate-figures__used">{used}</span>
-        <span className="rate-figures__limit">/ {limit === null ? '∞' : limit} en este minuto</span>
       </div>
 
+      <p className="rate-count">
+        <span className="rate-count__used">{used}</span>
+        <span className="rate-count__limit">de {limit === null ? 'ilimitadas' : limit}</span>
+      </p>
+
       {limit !== null && (
-        <div className={`rate-slots ${dense ? 'rate-slots--dense' : ''}`} aria-hidden="true">
+        <div className={`turnstile ${dense ? 'turnstile--dense' : ''}`} aria-hidden="true">
           {slots.map((isUsed, index) => (
-            <span key={index} className={`rate-slots__slot ${isUsed ? 'rate-slots__slot--used' : ''}`} />
+            <span key={index} className={`turnstile__slot ${isUsed ? 'turnstile__slot--used' : ''}`} />
           ))}
         </div>
       )}
 
       {blocked && (
-        <p className="rate-alert" role="status">
-          Alcanzaste el límite de tu plan. Podrás enviar de nuevo en {displayFormatter.countdown(secondsUntilReset)}.
+        <p className="signal-note signal-note--stop" role="status">
+          Llegaste al límite de tu plan. El envío se habilita en {displayFormatter.countdown(secondsUntilReset)}.
         </p>
       )}
     </section>
