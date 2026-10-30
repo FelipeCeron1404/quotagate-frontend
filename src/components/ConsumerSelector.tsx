@@ -11,7 +11,7 @@ interface ConsumerSelectorProps {
 export function ConsumerSelector({ consumers, selectedId, disabled, onSelect }: ConsumerSelectorProps) {
   return (
     <label className="consumer-selector">
-      <span className="consumer-selector__label">Usuario</span>
+      <span className="consumer-selector__label">Conectado como</span>
       <select
         className="consumer-selector__input"
         value={selectedId ?? ''}
@@ -21,7 +21,7 @@ export function ConsumerSelector({ consumers, selectedId, disabled, onSelect }: 
         {consumers.length === 0 && <option value="">Cargando usuarios…</option>}
         {consumers.map((consumer) => (
           <option key={consumer.id} value={consumer.id}>
-            {consumer.displayName} · {planCatalog.offerFor(consumer.plan).label}
+            {consumer.displayName} ({planCatalog.offerFor(consumer.plan).label})
           </option>
         ))}
       </select>

@@ -92,7 +92,7 @@ export function UpgradeModal({ consumerId, currentPlan, quotaExhausted, onClose,
             </h2>
             {step !== 'done' && (
               <p className="muted">
-                Tu plan actual es <PlanBadge plan={currentPlan} />. Sube de plan para seguir usando el servicio.
+                Tu plan actual es <PlanBadge plan={currentPlan} />. Elige uno superior para seguir usando el asistente.
               </p>
             )}
           </div>
@@ -236,7 +236,7 @@ export function UpgradeModal({ consumerId, currentPlan, quotaExhausted, onClose,
               Ahora tienes el plan <PlanBadge plan={selectedOffer.plan} size="large" />
             </p>
             <p className="muted">
-              Referencia {receipt.reference} · tarjeta terminada en {receipt.lastFourDigits}
+              Referencia {receipt.reference}, tarjeta terminada en {receipt.lastFourDigits}
             </p>
             <button type="button" className="button button--primary" onClick={onClose}>
               Seguir usando el asistente

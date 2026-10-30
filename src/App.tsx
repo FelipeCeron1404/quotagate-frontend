@@ -145,12 +145,12 @@ export default function App() {
       const retryAfter = error.retryAfterSeconds ?? 60
       setBlockedUntil(Date.now() + retryAfter * 1000)
       setChainOutcome('rate-limited')
-      appendMessage({ author: 'notice', text: `429 · ${error.message}` })
+      appendMessage({ author: 'notice', text: `Detenido por el límite por minuto (429). ${error.message}` })
       return
     }
     if (error instanceof ApiRequestError && error.isQuotaExhausted()) {
       setChainOutcome('quota-exhausted')
-      appendMessage({ author: 'notice', text: `402 · ${error.message}` })
+      appendMessage({ author: 'notice', text: `Detenido por la cuota mensual (402). ${error.message}` })
       setUpgradeOpen(true)
       return
     }
@@ -193,12 +193,14 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="brand__mark" aria-hidden="true">
-            Q
-          </span>
+          <svg className="brand__mark" viewBox="0 0 40 40" aria-hidden="true">
+            <rect x="4" y="8" width="5" height="26" rx="1.5" />
+            <rect x="31" y="8" width="5" height="26" rx="1.5" />
+            <rect className="brand__bar" x="9" y="17" width="22" height="4" rx="2" />
+          </svg>
           <div>
-            <h1 className="brand__name">QuotaGate IA</h1>
-            <p className="brand__tagline">Consumo de IA con proxies de rate limiting y cuotas</p>
+            <h1 className="brand__name">QuotaGate</h1>
+            <p className="brand__tagline">Tu acceso a la IA, medido por plan</p>
           </div>
         </div>
         <div className="topbar__controls">
@@ -238,7 +240,7 @@ export default function App() {
           <ProxyChainTrace outcome={chainOutcome} />
         </div>
 
-        <aside className="layout__side">
+        <aside className="instrument-panel" aria-label="Estado de tu plan">
           {status ? (
             <>
               <QuotaMeter status={status} onUpgradeClick={() => setUpgradeOpen(true)} />
@@ -246,15 +248,17 @@ export default function App() {
               <UsageHistoryChart history={history} />
             </>
           ) : (
-            <section className="card card--loading">
-              <p className="muted">{dashboard.loading ? 'Cargando estado de la cuota…' : 'Selecciona un usuario'}</p>
-            </section>
+            <div className="instrument-panel__loading">
+              <p className="muted">
+                {dashboard.loading ? 'Leyendo el estado de tu plan…' : 'Elige un usuario para ver su consumo'}
+              </p>
+            </div>
           )}
         </aside>
       </main>
 
       <footer className="footer">
-        <span>Taller de Patrones de Software · Patrón Proxy</span>
+        <span>Taller de Patrones de Software, patrón Proxy</span>
         <button type="button" className="link-button" onClick={() => void resetDemo()} disabled={resettingDemo}>
           {resettingDemo ? 'Restableciendo…' : 'Restablecer datos de demostración'}
         </button>

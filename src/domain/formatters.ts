@@ -26,6 +26,10 @@ export class DisplayFormatter {
     return shortDayFormatter.format(new Date(`${isoDate}T00:00:00Z`))
   }
 
+  seconds(milliseconds: number): string {
+    return `${(milliseconds / 1000).toLocaleString('es-CO', { maximumFractionDigits: 1 })} s`
+  }
+
   countdown(totalSeconds: number): string {
     const safeSeconds = Math.max(0, Math.ceil(totalSeconds))
     const minutes = Math.floor(safeSeconds / 60)

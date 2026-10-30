@@ -84,19 +84,19 @@ export function ChatPanel({
   }
 
   return (
-    <section className="chat card">
-      <header className="card__header">
-        <h2 className="card__title">Asistente de IA</h2>
-        <span className="card__caption">Servicio simulado · respuesta en ~1,2 s</span>
-      </header>
+    <section className="chat" aria-labelledby="chat-heading">
+      <div className="chat__heading">
+        <h2 id="chat-heading">Asistente</h2>
+        <span className="chat__aside">Modelo simulado, responde en 1,2 segundos aproximadamente</span>
+      </div>
 
       <div className="chat__messages" ref={listRef} aria-live="polite">
         {messages.length === 0 && (
           <div className="chat__empty">
-            <p className="chat__empty-title">Escribe un prompt para empezar</p>
+            <p className="chat__empty-title">¿Qué quieres preguntarle a la IA?</p>
             <p className="muted">
-              Cada solicitud pasa primero por el proxy de rate limiting, luego por el de cuota y por último llega al
-              servicio de IA.
+              Antes de llegar al modelo, cada pregunta cruza dos controles: el límite por minuto y la cuota mensual
+              de tu plan.
             </p>
           </div>
         )}
@@ -105,7 +105,7 @@ export function ChatPanel({
             <p className="bubble__text">{message.text}</p>
             {message.totalTokens !== undefined && (
               <span className="bubble__meta">
-                {displayFormatter.number(message.totalTokens)} tokens · {message.latencyMs} ms
+                {displayFormatter.number(message.totalTokens)} tokens en {displayFormatter.seconds(message.latencyMs ?? 0)}
               </span>
             )}
           </article>
@@ -125,7 +125,7 @@ export function ChatPanel({
           value={draft}
           maxLength={MAX_PROMPT_LENGTH}
           rows={3}
-          placeholder={quotaExhausted ? 'Tu cuota mensual se agotó. Mejora tu plan para seguir.' : 'Escribe tu prompt…'}
+          placeholder={quotaExhausted ? 'Tu cuota mensual se agotó. Mejora tu plan para continuar.' : 'Escribe tu pregunta…'}
           disabled={quotaExhausted}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={handleKeyDown}
@@ -134,12 +134,12 @@ export function ChatPanel({
         <div className="composer__footer">
           <p className={`estimator ${exceedsRemaining ? 'estimator--warning' : ''}`} aria-live="polite">
             {estimate.promptTokens === 0 ? (
-              'El estimador de tokens aparecerá al escribir'
+              'Al escribir verás cuántos tokens consumirá tu pregunta'
             ) : (
               <>
-                ≈ <strong>{displayFormatter.number(estimate.totalTokens)} tokens</strong> ({estimate.promptTokens} del
-                prompt + ~{estimate.completionTokens} de respuesta)
-                {exceedsRemaining && ' · supera tus tokens disponibles'}
+                Consumirá cerca de <strong>{displayFormatter.number(estimate.totalTokens)} tokens</strong>:{' '}
+                {estimate.promptTokens} del prompt y unos {estimate.completionTokens} de respuesta
+                {exceedsRemaining && '. Supera tus tokens disponibles'}
               </>
             )}
           </p>
