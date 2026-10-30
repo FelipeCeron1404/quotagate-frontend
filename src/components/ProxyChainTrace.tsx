@@ -11,13 +11,15 @@ interface ChainStage {
 }
 
 const STAGES: ChainStage[] = [
-  { key: 'client', title: 'Cliente', detail: 'POST /api/ai/generate' },
-  { key: 'rate', title: 'RateLimitProxyService', detail: '429 Too Many Requests' },
-  { key: 'quota', title: 'QuotaProxyService', detail: '402 Payment Required' },
-  { key: 'real', title: 'MockAIGenerationService', detail: 'Texto generado' },
+  { key: 'client', title: 'Tu pregunta', detail: 'POST /api/ai/generate' },
+  { key: 'rate', title: 'RateLimitProxyService', detail: 'Responde 429 si superas el límite por minuto' },
+  { key: 'quota', title: 'QuotaProxyService', detail: 'Responde 402 si se agotó la cuota mensual' },
+  { key: 'real', title: 'MockAIGenerationService', detail: 'Genera el texto' },
 ]
 
-function stageState(stageKey: string, outcome: ChainOutcome): 'neutral' | 'passed' | 'blocked' {
+type StageState = 'neutral' | 'passed' | 'blocked'
+
+function stageState(stageKey: string, outcome: ChainOutcome): StageState {
   if (outcome === 'idle' || outcome === 'failed') {
     return 'neutral'
   }
@@ -31,30 +33,30 @@ function stageState(stageKey: string, outcome: ChainOutcome): 'neutral' | 'passe
 }
 
 const OUTCOME_LABELS: Record<ChainOutcome, string> = {
-  idle: 'Envía un prompt para ver el recorrido por la cadena de proxies',
-  passed: 'La solicitud atravesó ambos proxies y llegó al servicio real',
-  'rate-limited': 'El proxy de rate limiting detuvo la solicitud',
-  'quota-exhausted': 'El proxy de cuota detuvo la solicitud',
-  failed: 'La solicitud no pudo completarse',
+  idle: 'Envía una pregunta para ver por dónde pasa.',
+  passed: 'Cruzó los dos controles y llegó al modelo.',
+  'rate-limited': 'Se detuvo en el control de solicitudes por minuto.',
+  'quota-exhausted': 'Se detuvo en el control de cuota mensual.',
+  failed: 'No llegó al servidor.',
 }
 
 export function ProxyChainTrace({ outcome }: ProxyChainTraceProps) {
   return (
-    <section className="card chain">
-      <header className="card__header">
-        <h2 className="card__title">Cadena de proxies</h2>
-        <span className="card__caption">{OUTCOME_LABELS[outcome]}</span>
-      </header>
-      <ol className="chain__stages">
-        {STAGES.map((stage) => {
-          const state = stageState(stage.key, outcome)
-          return (
-            <li key={stage.key} className={`chain__stage chain__stage--${state}`}>
-              <span className="chain__title">{stage.title}</span>
-              <span className="chain__detail">{stage.detail}</span>
-            </li>
-          )
-        })}
+    <section className="gate-track" aria-labelledby="track-heading">
+      <div className="gate-track__heading">
+        <h2 id="track-heading">Recorrido de la última solicitud</h2>
+        <p className="gate-track__summary" aria-live="polite">
+          {OUTCOME_LABELS[outcome]}
+        </p>
+      </div>
+      <ol className="gate-track__stages">
+        {STAGES.map((stage) => (
+          <li key={stage.key} className={`gate-stop gate-stop--${stageState(stage.key, outcome)}`}>
+            <span className="gate-stop__lamp" aria-hidden="true" />
+            <span className="gate-stop__title">{stage.title}</span>
+            <span className="gate-stop__detail">{stage.detail}</span>
+          </li>
+        ))}
       </ol>
     </section>
   )
