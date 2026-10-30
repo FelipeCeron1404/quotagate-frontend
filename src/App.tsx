@@ -136,7 +136,10 @@ export default function App() {
       return true
     } finally {
       setSending(false)
-      await refresh()
+      const latestStatus = await refresh()
+      if (latestStatus && !latestStatus.unlimited && (latestStatus.tokensRemaining ?? 0) <= 0) {
+        setUpgradeOpen(true)
+      }
     }
   }
 
