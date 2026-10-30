@@ -1,3 +1,5 @@
+import { Fragment } from 'react'
+
 export type ChainOutcome = 'idle' | 'passed' | 'rate-limited' | 'quota-exhausted' | 'failed'
 
 interface ProxyChainTraceProps {
@@ -18,6 +20,16 @@ const STAGES: ChainStage[] = [
 ]
 
 type StageState = 'neutral' | 'passed' | 'blocked'
+
+function withCamelCaseBreaks(identifier: string) {
+  const parts = identifier.split(/(?=[A-Z][a-z])/)
+  return parts.map((part, index) => (
+    <Fragment key={part + index}>
+      {index > 0 && <wbr />}
+      {part}
+    </Fragment>
+  ))
+}
 
 function stageState(stageKey: string, outcome: ChainOutcome): StageState {
   if (outcome === 'idle' || outcome === 'failed') {
@@ -53,7 +65,7 @@ export function ProxyChainTrace({ outcome }: ProxyChainTraceProps) {
         {STAGES.map((stage) => (
           <li key={stage.key} className={`gate-stop gate-stop--${stageState(stage.key, outcome)}`}>
             <span className="gate-stop__lamp" aria-hidden="true" />
-            <span className="gate-stop__title">{stage.title}</span>
+            <span className="gate-stop__title">{withCamelCaseBreaks(stage.title)}</span>
             <span className="gate-stop__detail">{stage.detail}</span>
           </li>
         ))}

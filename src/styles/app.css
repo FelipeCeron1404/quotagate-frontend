@@ -793,7 +793,6 @@ textarea {
   font-family: var(--code);
   font-size: 13px;
   font-weight: 500;
-  word-break: break-word;
 }
 
 .gate-stop:first-child .gate-stop__title {
