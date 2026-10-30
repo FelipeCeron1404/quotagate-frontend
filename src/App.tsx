@@ -1,122 +1,274 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useCallback, useEffect, useState } from 'react'
+import { quotaApiClient } from './api/apiClient'
+import { ApiRequestError } from './api/ApiRequestError'
+import type { ConsumerSummary, QuotaStatus } from './api/types'
+import { ChatPanel, type ChatMessage } from './components/ChatPanel'
+import { ConsumerSelector } from './components/ConsumerSelector'
+import { PlanBadge } from './components/PlanBadge'
+import { ProxyChainTrace, type ChainOutcome } from './components/ProxyChainTrace'
+import { QuotaMeter } from './components/QuotaMeter'
+import { RateLimitMeter } from './components/RateLimitMeter'
+import { UpgradeModal } from './components/UpgradeModal'
+import { UsageHistoryChart } from './components/UsageHistoryChart'
+import { useCountdown } from './hooks/useCountdown'
+import { useQuotaDashboard } from './hooks/useQuotaDashboard'
 
-function App() {
-  const [count, setCount] = useState(0)
+const SELECTED_CONSUMER_KEY = 'quotagate.selectedConsumer'
+const STATUS_SYNC_INTERVAL_MS = 15000
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+function readStoredConsumer(): string | null {
+  try {
+    return window.localStorage.getItem(SELECTED_CONSUMER_KEY)
+  } catch {
+    return null
+  }
 }
 
-export default App
+function storeConsumer(consumerId: string) {
+  try {
+    window.localStorage.setItem(SELECTED_CONSUMER_KEY, consumerId)
+  } catch {
+    return
+  }
+}
+
+let messageSequence = 0
+
+function nextMessageId(): string {
+  messageSequence += 1
+  return `message-${messageSequence}`
+}
+
+export default function App() {
+  const [consumers, setConsumers] = useState<ConsumerSummary[]>([])
+  const [consumersError, setConsumersError] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [sending, setSending] = useState(false)
+  const [blockedUntil, setBlockedUntil] = useState<number | null>(null)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const [chainOutcome, setChainOutcome] = useState<ChainOutcome>('idle')
+  const [resettingDemo, setResettingDemo] = useState(false)
+
+  const dashboard = useQuotaDashboard(selectedId)
+  const { status, history, windowResetAt, refresh, applyStatus } = dashboard
+  const windowSecondsLeft = useCountdown(windowResetAt)
+  const blockedSecondsLeft = useCountdown(blockedUntil)
+
+  const loadConsumers = useCallback(async () => {
+    try {
+      const loaded = await quotaApiClient.listConsumers()
+      setConsumers(loaded)
+      setConsumersError(null)
+      setSelectedId((current) => {
+        if (current && loaded.some((consumer) => consumer.id === current)) {
+          return current
+        }
+        const stored = readStoredConsumer()
+        if (stored && loaded.some((consumer) => consumer.id === stored)) {
+          return stored
+        }
+        return loaded[0]?.id ?? null
+      })
+    } catch (error) {
+      setConsumersError(error instanceof ApiRequestError ? error.message : 'No se pudieron cargar los usuarios')
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadConsumers()
+  }, [loadConsumers])
+
+  useEffect(() => {
+    if (windowResetAt === null || windowSecondsLeft > 0) {
+      return
+    }
+    const timeoutId = window.setTimeout(() => void refresh(), 600)
+    return () => window.clearTimeout(timeoutId)
+  }, [windowResetAt, windowSecondsLeft, refresh])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      if (!document.hidden) {
+        void refresh()
+      }
+    }, STATUS_SYNC_INTERVAL_MS)
+    return () => window.clearInterval(intervalId)
+  }, [refresh])
+
+  function selectConsumer(consumerId: string) {
+    storeConsumer(consumerId)
+    setSelectedId(consumerId)
+    setMessages([])
+    setBlockedUntil(null)
+    setChainOutcome('idle')
+    setUpgradeOpen(false)
+  }
+
+  function appendMessage(message: Omit<ChatMessage, 'id'>) {
+    setMessages((previous) => [...previous, { ...message, id: nextMessageId() }])
+  }
+
+  const limit = status?.requestsPerMinuteLimit ?? null
+  const windowExhausted = limit !== null && status !== null && status.requestsUsedThisMinute >= limit
+  const rateLimited = blockedSecondsLeft > 0 || (windowExhausted && windowSecondsLeft > 0)
+  const rateLimitSecondsLeft = blockedSecondsLeft > 0 ? blockedSecondsLeft : windowSecondsLeft
+  const quotaExhausted = status !== null && !status.unlimited && (status.tokensRemaining ?? 0) <= 0
+
+  async function sendPrompt(prompt: string): Promise<boolean> {
+    if (!selectedId) {
+      return false
+    }
+    appendMessage({ author: 'user', text: prompt })
+    setSending(true)
+    try {
+      const result = await quotaApiClient.generate(selectedId, prompt)
+      appendMessage({
+        author: 'assistant',
+        text: result.text,
+        totalTokens: result.totalTokens,
+        latencyMs: result.latencyMs,
+      })
+      setChainOutcome('passed')
+      return true
+    } catch (error) {
+      handleGenerationError(error)
+      return true
+    } finally {
+      setSending(false)
+      await refresh()
+    }
+  }
+
+  function handleGenerationError(error: unknown) {
+    if (error instanceof ApiRequestError && error.isRateLimited()) {
+      const retryAfter = error.retryAfterSeconds ?? 60
+      setBlockedUntil(Date.now() + retryAfter * 1000)
+      setChainOutcome('rate-limited')
+      appendMessage({ author: 'notice', text: `429 · ${error.message}` })
+      return
+    }
+    if (error instanceof ApiRequestError && error.isQuotaExhausted()) {
+      setChainOutcome('quota-exhausted')
+      appendMessage({ author: 'notice', text: `402 · ${error.message}` })
+      setUpgradeOpen(true)
+      return
+    }
+    setChainOutcome('failed')
+    appendMessage({
+      author: 'notice',
+      text: error instanceof Error ? error.message : 'No fue posible generar la respuesta',
+    })
+  }
+
+  function handleUpgraded(nextStatus: QuotaStatus) {
+    applyStatus(nextStatus)
+    setConsumers((previous) =>
+      previous.map((consumer) => (consumer.id === nextStatus.consumerId ? { ...consumer, plan: nextStatus.plan } : consumer)),
+    )
+    appendMessage({ author: 'notice', text: `Plan actualizado a ${nextStatus.plan}. Ya puedes seguir enviando prompts.` })
+    setChainOutcome('idle')
+    void refresh()
+  }
+
+  async function resetDemo() {
+    setResettingDemo(true)
+    try {
+      const restored = await quotaApiClient.resetDemo()
+      setConsumers(restored)
+      setMessages([])
+      setBlockedUntil(null)
+      setChainOutcome('idle')
+      await refresh()
+    } catch (error) {
+      setConsumersError(error instanceof ApiRequestError ? error.message : 'No se pudo restablecer la demo')
+    } finally {
+      setResettingDemo(false)
+    }
+  }
+
+  const errorMessage = consumersError ?? dashboard.errorMessage
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand__mark" aria-hidden="true">
+            Q
+          </span>
+          <div>
+            <h1 className="brand__name">QuotaGate IA</h1>
+            <p className="brand__tagline">Consumo de IA con proxies de rate limiting y cuotas</p>
+          </div>
+        </div>
+        <div className="topbar__controls">
+          <ConsumerSelector
+            consumers={consumers}
+            selectedId={selectedId}
+            disabled={sending}
+            onSelect={selectConsumer}
+          />
+          {status && <PlanBadge plan={status.plan} size="large" />}
+        </div>
+      </header>
+
+      {errorMessage && (
+        <div className="banner" role="alert">
+          <span>{errorMessage}</span>
+          <button type="button" className="button button--ghost" onClick={() => void loadConsumers().then(refresh)}>
+            Reintentar
+          </button>
+        </div>
+      )}
+
+      <main className="layout">
+        <div className="layout__main">
+          <ChatPanel
+            key={selectedId ?? 'none'}
+            messages={messages}
+            sending={sending}
+            rateLimitSecondsLeft={rateLimitSecondsLeft}
+            rateLimited={rateLimited}
+            quotaExhausted={quotaExhausted}
+            tokensRemaining={status?.unlimited ? null : (status?.tokensRemaining ?? null)}
+            expectedCompletionTokens={status?.expectedCompletionTokens ?? 0}
+            onSend={sendPrompt}
+            onUpgradeClick={() => setUpgradeOpen(true)}
+          />
+          <ProxyChainTrace outcome={chainOutcome} />
+        </div>
+
+        <aside className="layout__side">
+          {status ? (
+            <>
+              <QuotaMeter status={status} onUpgradeClick={() => setUpgradeOpen(true)} />
+              <RateLimitMeter status={status} secondsUntilReset={rateLimitSecondsLeft} blocked={rateLimited} />
+              <UsageHistoryChart history={history} />
+            </>
+          ) : (
+            <section className="card card--loading">
+              <p className="muted">{dashboard.loading ? 'Cargando estado de la cuota…' : 'Selecciona un usuario'}</p>
+            </section>
+          )}
+        </aside>
+      </main>
+
+      <footer className="footer">
+        <span>Taller de Patrones de Software · Patrón Proxy</span>
+        <button type="button" className="link-button" onClick={() => void resetDemo()} disabled={resettingDemo}>
+          {resettingDemo ? 'Restableciendo…' : 'Restablecer datos de demostración'}
+        </button>
+      </footer>
+
+      {upgradeOpen && status && selectedId && (
+        <UpgradeModal
+          consumerId={selectedId}
+          currentPlan={status.plan}
+          quotaExhausted={quotaExhausted}
+          onClose={() => setUpgradeOpen(false)}
+          onUpgraded={handleUpgraded}
+        />
+      )}
+    </div>
+  )
+}
